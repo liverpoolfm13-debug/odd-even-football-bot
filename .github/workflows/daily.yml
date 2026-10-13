@@ -1,3 +1,6 @@
+
+name: Odd Even Football Bot
+
 on:
   push:
     branches:
@@ -5,6 +8,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 4,7,10,13,16,19 * * *"
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
@@ -18,8 +22,9 @@ jobs:
           python-version: "3.12"
 
       - name: Run Telegram bot
-          env:
+        env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
         run: python bot.py
+```
