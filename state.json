@@ -1,5 +1,11 @@
 {
-  "active": null,
+  "active": {
+    "id": "match_fmb_bra2_2026_20261013_athletic_club_mg_londrina",
+    "kickoffAt": "2026-10-13T22:30:00+00:00",
+    "home": "Athletic Club MG",
+    "away": "Londrina",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille"
