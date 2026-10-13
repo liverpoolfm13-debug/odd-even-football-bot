@@ -1,6 +1,6 @@
 name: Odd Even Football Bot
 
-on:
+"on":
 push:
 branches:
 - main
@@ -15,6 +15,7 @@ jobs:
 run-bot:
 runs-on: ubuntu-latest
 
+```
 steps:
   - name: Checkout repository
     uses: actions/checkout@v4
@@ -32,3 +33,4 @@ steps:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
     run: python bot.py
+
