@@ -1,11 +1,10 @@
-
-name: Odd Even Football Bot
-
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
     - cron: "0 4,7,10,13,16,19 * * *"
-
 jobs:
   run-bot:
     runs-on: ubuntu-latest
