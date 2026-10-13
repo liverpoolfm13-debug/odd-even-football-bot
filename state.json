@@ -1,5 +1,11 @@
 {
-  "active": null,
+  "active": {
+    "id": "match_fmb_ucl_2026-27_20261013_arsenal_lille",
+    "kickoffAt": "2026-10-13T19:00:00+00:00",
+    "home": "Arsenal",
+    "away": "Lille",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp"
   ]
