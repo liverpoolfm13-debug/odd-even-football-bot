@@ -1,11 +1,5 @@
 {
-  "active": {
-    "id": "match_fmb_ucl_2026-27_20261014_feyenoord_como",
-    "kickoffAt": "2026-10-14T16:45:00+00:00",
-    "home": "Feyenoord",
-    "away": "Como",
-    "prediction": "ЧЁТ"
-  },
+  "active": null,
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
@@ -13,6 +7,7 @@
     "match_fmb_col1_2026_20261014_millonarios_once_caldas",
     "match_fmb_crc1_2026-27_20261014_deportiva_san_carlos_inter_san_carlos",
     "match_fmb_acl_2026-27_20261014_kashiwa_reysol_port_fc",
-    "match_fmb_est1_2026_20261014_narva_trans_fc_kuressaare"
+    "match_fmb_est1_2026_20261014_narva_trans_fc_kuressaare",
+    "match_fmb_ucl_2026-27_20261014_feyenoord_como"
   ]
 }
