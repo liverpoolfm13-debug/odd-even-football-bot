@@ -1,5 +1,11 @@
 {
-  "active": null,
+  "active": {
+    "id": "match_fmb_col1_2026_20261014_junior_fc_deportivo_pereira",
+    "kickoffAt": "2026-10-14T21:30:00+00:00",
+    "home": "Junior FC",
+    "away": "Deportivo Pereira",
+    "prediction": "ЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
