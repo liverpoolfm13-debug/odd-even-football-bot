@@ -1,5 +1,11 @@
 {
-  "active": null,
+  "active": {
+    "id": "match_fmb_acl_2026-27_20261014_kashiwa_reysol_port_fc",
+    "kickoffAt": "2026-10-14T10:00:00+00:00",
+    "home": "Kashiwa Reysol",
+    "away": "Port FC",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
