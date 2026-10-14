@@ -1,5 +1,11 @@
 {
-  "active": null,
+  "active": {
+    "id": "match_fmb_col1_2026_20261014_millonarios_once_caldas",
+    "kickoffAt": "2026-10-14T01:30:00+00:00",
+    "home": "Millonarios",
+    "away": "Once Caldas",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
