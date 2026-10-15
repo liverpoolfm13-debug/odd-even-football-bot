@@ -28,7 +28,7 @@ token: ${{ secrets.GITHUB_TOKEN }}
 
   - name: Run Telegram bot
     env:
-    TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
