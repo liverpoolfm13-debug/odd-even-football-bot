@@ -27,9 +27,13 @@ jobs:
           python-version: "3.12"
 
       - name: Run Telegram bot
+              - name: Check API key
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
-        run: python bot.py
+        run: |
+          if [ -n "$API_FOOTBALL_KEY" ]; then
+            echo "API_FOOTBALL_KEY OK"
+          else
+            echo "API_FOOTBALL_KEY MISSING"
+            exit 1
+          fi
