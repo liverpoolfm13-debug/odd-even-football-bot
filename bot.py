@@ -55,19 +55,24 @@ def old_api_matches(day):
     return payload["data"]
 
 
+```python
 def api_football_matches():
     now_local = datetime.now(TASHKENT)
     start_day = now_local.date()
     end_day = start_day + timedelta(days=7)
 
     params = urllib.parse.urlencode({
-        "from": start_day.isoformat(),
-        "to": end_day.isoformat(),
+        "from": start_day.strftime("%Y-%m-%d"),
+        "to": end_day.strftime("%Y-%m-%d"),
         "timezone": "Asia/Tashkent",
     })
 
+    url = f"{API_FOOTBALL_URL}?{params}"
+
+    print("Requesting API-Football fixtures:", url)
+
     payload = get_json(
-        f"{API_FOOTBALL_URL}?{params}",
+        url,
         {
             "x-apisports-key": API_FOOTBALL_KEY,
             "Accept": "application/json",
@@ -81,16 +86,13 @@ def api_football_matches():
 
     matches = payload.get("response")
     if not isinstance(matches, list):
-        raise RuntimeError("API-Football returned an unexpected response")
+        raise RuntimeError(
+            f"API-Football returned an unexpected response: {payload}"
+        )
 
-    print(
-        "API-Football requests remaining:",
-        # The remaining quota is also available in response headers,
-        # but get_json does not expose headers here.
-        "check API dashboard",
-    )
-
+    print("Fixtures received:", len(matches))
     return matches
+```
 
 
 def send_telegram(message):
