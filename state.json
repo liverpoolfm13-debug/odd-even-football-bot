@@ -1,11 +1,5 @@
 {
-  "active": {
-    "id": "match_ls_kos1_2026-27_20261015_malisheva_prishtina",
-    "kickoffAt": "2026-10-15T12:00:00+00:00",
-    "home": "Malisheva",
-    "away": "Prishtina",
-    "prediction": "НЕЧЁТ"
-  },
+  "active": null,
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
@@ -16,6 +10,7 @@
     "match_fmb_est1_2026_20261014_narva_trans_fc_kuressaare",
     "match_fmb_ucl_2026-27_20261014_feyenoord_como",
     "match_fmb_col1_2026_20261014_junior_fc_deportivo_pereira",
-    "match_fmb_lib_2026_20261015_fluminense_palmeiras"
+    "match_fmb_lib_2026_20261015_fluminense_palmeiras",
+    "openfoot:match_ls_kos1_2026-27_20261015_malisheva_prishtina"
   ]
 }
