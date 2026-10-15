@@ -411,7 +411,7 @@ def main():
     fixture = match.get("fixture") or {}
     fixture_id = fixture["id"]
     home, away = new_team_names(match)
-    prediction = random.choice(["ЧЁТ", "НЕЧЁТ"])
+    prediction = random.choice(["НЕЧЁТ"])
     local_time = kickoff.astimezone(TASHKENT).strftime("%d.%m.%Y %H:%M")
 
     state["active"] = {
