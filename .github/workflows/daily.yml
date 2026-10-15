@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: odd-even-football-bot
-  cancel-in-progress: false
+  cancel-in-progress: 
 
 jobs:
   run-bot:
