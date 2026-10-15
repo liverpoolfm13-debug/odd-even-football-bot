@@ -1,5 +1,12 @@
 {
-  "active": null,
+  "active": {
+    "provider": "api_football",
+    "id": "1525934",
+    "kickoffAt": "2026-10-15T17:30:00+00:00",
+    "home": "ML Vitebsk",
+    "away": "Torpedo Zhodino",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
