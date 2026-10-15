@@ -1,6 +1,6 @@
+```python
 import os
 import json
-import random
 import subprocess
 import urllib.request
 import urllib.parse
@@ -11,11 +11,9 @@ from zoneinfo import ZoneInfo
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-# Новый API
 API_FOOTBALL_KEY = os.environ["API_FOOTBALL_KEY"]
 API_FOOTBALL_URL = "https://v3.football.api-sports.io/fixtures"
 
-# Старый API нужен только для безопасного завершения уже активного матча
 OLD_API_KEY = os.environ.get("FOOTBALL_API_KEY")
 OLD_API_URL = "https://openfootapi.com/v1/matches"
 
@@ -28,17 +26,31 @@ CANCEL_STATUSES = {"PST", "CANC", "ABD"}
 
 
 def get_json(url, headers):
-    request = urllib.request.Request(
-        url,
-        headers=headers,
-    )
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    body = urllib.parse.urlencode({
+        "chat_id": CHAT_ID,
+        "text": message,
+    }).encode("utf-8")
+
+    request = urllib.request.Request(url, data=body)
+    with urllib.request.urlopen(request, timeout=20) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    if not result.get("ok"):
+        raise RuntimeError("Telegram did not accept the message")
+
+
 def old_api_matches(day):
     if not OLD_API_KEY:
-        raise RuntimeError("Missing FOOTBALL_API_KEY for old active match")
+        raise RuntimeError(
+            "Missing FOOTBALL_API_KEY for old active match"
+        )
 
     params = urllib.parse.urlencode({"date": day.isoformat()})
     payload = get_json(
@@ -55,59 +67,46 @@ def old_api_matches(day):
     return payload["data"]
 
 
-```python
 def api_football_matches():
-    now_local = datetime.now(TASHKENT)
-    start_day = now_local.date()
-    end_day = start_day + timedelta(days=7)
+    # Use explicit dates rather than the API's from/to parameters.
+    # Two requests cover today and tomorrow, including midnight.
+    today = datetime.now(TASHKENT).date()
+    matches_by_id = {}
 
-    params = urllib.parse.urlencode({
-        "from": start_day.strftime("%Y-%m-%d"),
-        "to": end_day.strftime("%Y-%m-%d"),
-        "timezone": "Asia/Tashkent",
-    })
+    for day in (today, today + timedelta(days=1)):
+        params = urllib.parse.urlencode({
+            "date": day.isoformat(),
+            "timezone": "Asia/Tashkent",
+        })
 
-    url = f"{API_FOOTBALL_URL}?{params}"
+        url = f"{API_FOOTBALL_URL}?{params}"
 
-    print("Requesting API-Football fixtures:", url)
-
-    payload = get_json(
-        url,
-        {
-            "x-apisports-key": API_FOOTBALL_KEY,
-            "Accept": "application/json",
-        },
-    )
-
-    if payload.get("errors"):
-        raise RuntimeError(
-            f"API-Football error: {payload['errors']}"
+        payload = get_json(
+            url,
+            {
+                "x-apisports-key": API_FOOTBALL_KEY,
+                "Accept": "application/json",
+            },
         )
 
-    matches = payload.get("response")
-    if not isinstance(matches, list):
-        raise RuntimeError(
-            f"API-Football returned an unexpected response: {payload}"
-        )
+        if payload.get("errors"):
+            raise RuntimeError(
+                f"API-Football error: {payload['errors']}"
+            )
 
-    print("Fixtures received:", len(matches))
-    return matches
-```
+        matches = payload.get("response")
+        if not isinstance(matches, list):
+            raise RuntimeError(
+                f"Unexpected API-Football response: {payload}"
+            )
 
+        for match in matches:
+            fixture_id = (match.get("fixture") or {}).get("id")
+            if fixture_id is not None:
+                matches_by_id[str(fixture_id)] = match
 
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    body = urllib.parse.urlencode({
-        "chat_id": CHAT_ID,
-        "text": message,
-    }).encode("utf-8")
-
-    request = urllib.request.Request(url, data=body)
-    with urllib.request.urlopen(request, timeout=20) as response:
-        result = json.loads(response.read().decode("utf-8"))
-
-    if not result.get("ok"):
-        raise RuntimeError("Telegram did not accept the message")
+    print("API-Football fixtures received:", len(matches_by_id))
+    return list(matches_by_id.values())
 
 
 def load_state():
@@ -274,13 +273,23 @@ def send_result(active, score):
     )
 
 
+def finish_cancelled(state, active, status, provider):
+    send_telegram(
+        f"⚠️ Матч отменён, перенесён или прерван:\n"
+        f"{active['home']} — {active['away']}\n"
+        f"Статус: {status}"
+    )
+    remember_processed(state, f"{provider}:{active['id']}")
+    state["active"] = None
+    save_state(state)
+
+
 def main():
     now = datetime.now(UTC)
     state = load_state()
     active = state.get("active")
 
-    # Если сохранён старый OpenFoot-матч, сначала завершаем его.
-    # Старое состояние может не содержать поля provider.
+    # Завершаем старый активный матч OpenFoot, если он остался в state.json.
     if active and active.get("provider", "openfoot") == "openfoot":
         if not OLD_API_KEY:
             raise RuntimeError(
@@ -288,8 +297,11 @@ def main():
                 "Keep FOOTBALL_API_KEY in GitHub Secrets."
             )
 
-        active_date = parse_datetime(active["kickoffAt"]).date()
-        old_matches = old_api_matches(active_date)
+        kickoff = parse_datetime(active.get("kickoffAt"))
+        if kickoff is None:
+            raise RuntimeError("Old active match has no valid kickoffAt")
+
+        old_matches = old_api_matches(kickoff.astimezone(TASHKENT).date())
 
         current = next(
             (
@@ -300,20 +312,13 @@ def main():
         )
 
         if current is None:
-            print("Old active match not found; keeping state unchanged.")
+            print("Old active match not found; waiting.")
             return
 
         status = str(current.get("status", "")).lower()
 
-        if status in ("postponed", "cancelled"):
-            send_telegram(
-                f"⚠️ Матч отменён или перенесён:\n"
-                f"{active['home']} — {active['away']}\n"
-                f"Статус: {status}"
-            )
-            remember_processed(state, f"openfoot:{active['id']}")
-            state["active"] = None
-            save_state(state)
+        if status in ("postponed", "cancelled", "canceled", "abandoned"):
+            finish_cancelled(state, active, status, "openfoot")
 
         elif status == "finished":
             score = old_extract_score(current)
@@ -330,11 +335,10 @@ def main():
             print(f"Waiting for old match to finish: {status}")
             return
 
-    # One API-Football request per run, for the next 7 days.
+    # Check the API-Football active match before choosing another one.
     matches = api_football_matches()
     active = state.get("active")
 
-    # Check an active match before considering any new prediction.
     if active and active.get("provider") == "api_football":
         current = next(
             (
@@ -346,7 +350,7 @@ def main():
         )
 
         if current is None:
-            print("Active API-Football match not found; waiting.")
+            print("Active match not found in today's/tomorrow's fixtures; waiting.")
             return
 
         fixture = current.get("fixture") or {}
@@ -365,20 +369,19 @@ def main():
             save_state(state)
 
         elif status in CANCEL_STATUSES:
-            send_telegram(
-                f"⚠️ Матч отменён, перенесён или прерван:\n"
-                f"{active['home']} — {active['away']}\n"
-                f"Статус: {status}"
-            )
-            remember_processed(state, f"api_football:{active['id']}")
-            state["active"] = None
-            save_state(state)
+            finish_cancelled(state, active, status, "api_football")
 
         else:
             print(f"Waiting for active match to finish: {status}")
             return
 
+    # Do not send a new prediction if an active match remains.
+    if state.get("active") is not None:
+        print("An active match remains; not selecting another.")
+        return
+
     processed = set(state["processed"])
+    window_end = now + timedelta(hours=2)
     candidates = []
 
     for match in matches:
@@ -392,11 +395,9 @@ def main():
             continue
         if f"api_football:{fixture_id}" in processed:
             continue
-
-        # Only matches not yet started; exclude live, postponed and cancelled.
         if status != "NS":
             continue
-        if kickoff <= now:
+        if not (now < kickoff <= window_end):
             continue
 
         candidates.append((kickoff, match))
@@ -404,14 +405,14 @@ def main():
     candidates.sort(key=lambda item: item[0])
 
     if not candidates:
-        print("No suitable upcoming match found in the next 7 days.")
+        print("No suitable match starting within the next 2 hours.")
         return
 
     kickoff, match = candidates[0]
     fixture = match.get("fixture") or {}
     fixture_id = fixture["id"]
     home, away = new_team_names(match)
-    prediction = random.choice(["НЕЧЁТ"])
+    prediction = "НЕЧЁТ"
     local_time = kickoff.astimezone(TASHKENT).strftime("%d.%m.%Y %H:%M")
 
     state["active"] = {
@@ -423,7 +424,7 @@ def main():
         "prediction": prediction,
     }
 
-    # Save the active fixture first, so it is tracked if Telegram succeeds.
+    # Save state before sending the Telegram message.
     save_state(state)
 
     send_telegram(
@@ -439,3 +440,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
