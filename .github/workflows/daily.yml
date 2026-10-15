@@ -1,6 +1,6 @@
 name: Odd Even Football Bot
 
-"on":
+on:
 workflow_dispatch:
 schedule:
 - cron: "*/30 * * * *"
@@ -26,20 +26,9 @@ token: ${{ secrets.GITHUB_TOKEN }}
     with:
       python-version: "3.12"
 
-  - name: Check API key
-    env:
-      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-    run: |
-      if [ -n "$API_FOOTBALL_KEY" ]; then
-        echo "API_FOOTBALL_KEY OK"
-      else
-        echo "API_FOOTBALL_KEY MISSING"
-        exit 1
-      fi
-
   - name: Run Telegram bot
     env:
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+    TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
