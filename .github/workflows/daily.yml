@@ -1,6 +1,6 @@
 name: Odd Even Football Bot
 
-"on":
+on:
   workflow_dispatch:
   schedule:
     - cron: "*/30 * * * *"
