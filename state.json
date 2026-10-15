@@ -1,5 +1,11 @@
 {
-  "active": null,
+  "active": {
+    "id": "match_ls_kos1_2026-27_20261015_malisheva_prishtina",
+    "kickoffAt": "2026-10-15T12:00:00+00:00",
+    "home": "Malisheva",
+    "away": "Prishtina",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
