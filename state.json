@@ -1,5 +1,12 @@
 {
-  "active": null,
+  "active": {
+    "provider": "api_football",
+    "id": "1593045",
+    "kickoffAt": "2026-10-16T10:30:00+00:00",
+    "home": "Karbon Cherkasy",
+    "away": "Rebel",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
