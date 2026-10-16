@@ -1,3 +1,4 @@
+
 import os
 import json
 import subprocess
@@ -22,6 +23,13 @@ UTC = timezone.utc
 
 FINAL_STATUSES = {"FT", "AET", "PEN", "AWD", "WO"}
 CANCEL_STATUSES = {"PST", "CANC", "ABD"}
+
+# Защита от вечного ожидания старого матча.
+STALE_AFTER_HOURS = 6
+
+# Если API сообщил о завершении, но не дал счёт,
+# ждём дольше, прежде чем закрыть запись без результата.
+SCORE_GRACE_HOURS = 24
 
 
 def get_json(url, headers):
@@ -66,38 +74,51 @@ def old_api_matches(day):
     return payload["data"]
 
 
+def api_football_request(params):
+    url = f"{API_FOOTBALL_URL}?{urllib.parse.urlencode(params)}"
+
+    payload = get_json(
+        url,
+        {
+            "x-apisports-key": API_FOOTBALL_KEY,
+            "Accept": "application/json",
+        },
+    )
+
+    if payload.get("errors"):
+        raise RuntimeError(
+            f"API-Football error: {payload['errors']}"
+        )
+
+    matches = payload.get("response")
+    if not isinstance(matches, list):
+        raise RuntimeError("Unexpected API-Football response")
+
+    return matches
+
+
+def api_football_match_by_id(fixture_id):
+    # Отдельно проверяем активный матч по ID,
+    # даже если его уже нет в списке сегодняшних матчей.
+    matches = api_football_request({"id": str(fixture_id)})
+
+    for match in matches:
+        current_id = (match.get("fixture") or {}).get("id")
+        if str(current_id) == str(fixture_id):
+            return match
+
+    return None
+
+
 def api_football_matches():
-    # Use explicit dates rather than the API's from/to parameters.
-    # Two requests cover today and tomorrow, including midnight.
     today = datetime.now(TASHKENT).date()
     matches_by_id = {}
 
     for day in (today, today + timedelta(days=1)):
-        params = urllib.parse.urlencode({
+        matches = api_football_request({
             "date": day.isoformat(),
             "timezone": "Asia/Tashkent",
         })
-
-        url = f"{API_FOOTBALL_URL}?{params}"
-
-        payload = get_json(
-            url,
-            {
-                "x-apisports-key": API_FOOTBALL_KEY,
-                "Accept": "application/json",
-            },
-        )
-
-        if payload.get("errors"):
-            raise RuntimeError(
-                f"API-Football error: {payload['errors']}"
-            )
-
-        matches = payload.get("response")
-        if not isinstance(matches, list):
-            raise RuntimeError(
-                f"Unexpected API-Football response: {payload}"
-            )
 
         for match in matches:
             fixture_id = (match.get("fixture") or {}).get("id")
@@ -144,6 +165,7 @@ def save_state(state):
             check=True,
         )
         subprocess.run(["git", "push"], check=True)
+
     elif changed.returncode != 0:
         raise RuntimeError("Could not check state changes")
 
@@ -153,6 +175,7 @@ def parse_datetime(value):
         return None
 
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
 
@@ -171,6 +194,7 @@ def new_kickoff(match):
 def old_team_names(match):
     home = match.get("homeTeam") or {}
     away = match.get("awayTeam") or {}
+
     return (
         home.get("name", "Неизвестная команда"),
         away.get("name", "Неизвестная команда"),
@@ -181,6 +205,7 @@ def new_team_names(match):
     teams = match.get("teams") or {}
     home = teams.get("home") or {}
     away = teams.get("away") or {}
+
     return (
         home.get("name", "Неизвестная команда"),
         away.get("name", "Неизвестная команда"),
@@ -211,14 +236,21 @@ def old_extract_score(match):
     if isinstance(score, dict):
         for key in ("fullTime", "full_time", "regularTime", "ft"):
             section = score.get(key)
+
             if isinstance(section, dict):
                 home = old_side_score(section.get("home"))
                 away = old_side_score(section.get("away"))
+
                 if home is not None and away is not None:
                     return home, away
 
-        home = old_side_score(score.get("home", score.get("homeScore")))
-        away = old_side_score(score.get("away", score.get("awayScore")))
+        home = old_side_score(
+            score.get("home", score.get("homeScore"))
+        )
+        away = old_side_score(
+            score.get("away", score.get("awayScore"))
+        )
+
         if home is not None and away is not None:
             return home, away
 
@@ -228,6 +260,7 @@ def old_extract_score(match):
     ):
         home = old_side_score(match.get(home_key))
         away = old_side_score(match.get(away_key))
+
         if home is not None and away is not None:
             return home, away
 
@@ -250,8 +283,10 @@ def new_extract_score(match):
 
 def remember_processed(state, match_key):
     processed = state["processed"]
+
     if match_key not in processed:
         processed.append(match_key)
+
     state["processed"] = processed[-200:]
 
 
@@ -260,7 +295,11 @@ def send_result(active, score):
     total = home_goals + away_goals
     actual = "ЧЁТ" if total % 2 == 0 else "НЕЧЁТ"
     prediction = active["prediction"]
-    verdict = "✅ УГАДАНО" if prediction == actual else "❌ НЕ УГАДАНО"
+
+    verdict = (
+        "✅ УГАДАНО" if prediction == actual
+        else "❌ НЕ УГАДАНО"
+    )
 
     send_telegram(
         f"🏁 РЕЗУЛЬТАТ МАТЧА\n\n"
@@ -278,9 +317,51 @@ def finish_cancelled(state, active, status, provider):
         f"{active['home']} — {active['away']}\n"
         f"Статус: {status}"
     )
+
     remember_processed(state, f"{provider}:{active['id']}")
     state["active"] = None
     save_state(state)
+
+
+def finish_stale(state, active, provider, reason):
+    # Не объявляем матч отменённым и не придумываем счёт.
+    # Сообщаем, что результат не удалось получить.
+    send_telegram(
+        f"⚠️ Старая запись матча закрыта\n\n"
+        f"{active['home']} — {active['away']}\n"
+        f"ID матча: {active['id']}\n"
+        f"Причина: {reason}\n\n"
+        f"Итоговый счёт не подтверждён. "
+        f"Это не означает, что матч отменён.\n"
+        f"Бот продолжит поиск новых матчей."
+    )
+
+    remember_processed(state, f"{provider}:{active['id']}")
+    state["active"] = None
+    save_state(state)
+
+
+def is_older_than(kickoff, hours, now):
+    return now >= kickoff + timedelta(hours=hours)
+
+
+def close_if_score_unavailable(state, active, provider, now):
+    kickoff = parse_datetime(active.get("kickoffAt"))
+
+    if (
+        kickoff
+        and is_older_than(kickoff, SCORE_GRACE_HOURS, now)
+    ):
+        finish_stale(
+            state,
+            active,
+            provider,
+            "API сообщил о завершении матча, "
+            "но итоговый счёт долго недоступен",
+        )
+        return True
+
+    return False
 
 
 def main():
@@ -288,7 +369,7 @@ def main():
     state = load_state()
     active = state.get("active")
 
-    # Завершаем старый активный матч OpenFoot, если он остался в state.json.
+    # 1. Обрабатываем оставшийся матч старого OpenFoot API.
     if active and active.get("provider", "openfoot") == "openfoot":
         if not OLD_API_KEY:
             raise RuntimeError(
@@ -296,11 +377,16 @@ def main():
                 "Keep FOOTBALL_API_KEY in GitHub Secrets."
             )
 
-        kickoff = parse_datetime(active.get("kickoffAt"))
-        if kickoff is None:
-            raise RuntimeError("Old active match has no valid kickoffAt")
+        kickoff = old_kickoff(active)
 
-        old_matches = old_api_matches(kickoff.astimezone(TASHKENT).date())
+        if kickoff is None:
+            raise RuntimeError(
+                "Old active match has no valid kickoffAt"
+            )
+
+        old_matches = old_api_matches(
+            kickoff.astimezone(TASHKENT).date()
+        )
 
         current = next(
             (
@@ -311,70 +397,157 @@ def main():
         )
 
         if current is None:
-            print("Old active match not found; waiting.")
-            return
-
-        status = str(current.get("status", "")).lower()
-
-        if status in ("postponed", "cancelled", "canceled", "abandoned"):
-            finish_cancelled(state, active, status, "openfoot")
-
-        elif status == "finished":
-            score = old_extract_score(current)
-            if score is None:
-                print("Old match finished, but score is not available yet.")
+            if is_older_than(kickoff, STALE_AFTER_HOURS, now):
+                finish_stale(
+                    state,
+                    active,
+                    "openfoot",
+                    "Матч отсутствует в ответе старого API "
+                    "более 6 часов после начала",
+                )
+            else:
+                print("Old active match not found; waiting.")
                 return
 
-            send_result(active, score)
-            remember_processed(state, f"openfoot:{active['id']}")
-            state["active"] = None
-            save_state(state)
-
         else:
-            print(f"Waiting for old match to finish: {status}")
-            return
+            status = str(current.get("status", "")).lower()
 
-    # Check the API-Football active match before choosing another one.
+            if status in (
+                "postponed", "cancelled", "canceled", "abandoned"
+            ):
+                finish_cancelled(
+                    state, active, status, "openfoot"
+                )
+
+            elif status == "finished":
+                score = old_extract_score(current)
+
+                if score is None:
+                    if close_if_score_unavailable(
+                        state, active, "openfoot", now
+                    ):
+                        pass
+                    else:
+                        print(
+                            "Old match finished, "
+                            "but score is not available yet."
+                        )
+                        return
+                else:
+                    send_result(active, score)
+                    remember_processed(
+                        state, f"openfoot:{active['id']}"
+                    )
+                    state["active"] = None
+                    save_state(state)
+
+            elif is_older_than(kickoff, STALE_AFTER_HOURS, now):
+                finish_stale(
+                    state,
+                    active,
+                    "openfoot",
+                    f"Статус матча не обновлялся: {status}",
+                )
+
+            else:
+                print(f"Waiting for old match to finish: {status}")
+                return
+
+    # 2. Получаем сегодняшние и завтрашние матчи.
     matches = api_football_matches()
     active = state.get("active")
 
+    # 3. Проверяем активный матч API-Football.
     if active and active.get("provider") == "api_football":
+        fixture_id = active["id"]
+
         current = next(
             (
                 match for match in matches
                 if str((match.get("fixture") or {}).get("id"))
-                == str(active["id"])
+                == str(fixture_id)
             ),
             None,
         )
 
+        # Если в списке нет, запрашиваем отдельно по ID.
         if current is None:
-            print("Active match not found in today's/tomorrow's fixtures; waiting.")
-            return
+            current = api_football_match_by_id(fixture_id)
 
-        fixture = current.get("fixture") or {}
-        status_obj = fixture.get("status") or {}
-        status = str(status_obj.get("short", "")).upper()
+        kickoff = parse_datetime(active.get("kickoffAt"))
 
-        if status in FINAL_STATUSES:
-            score = new_extract_score(current)
-            if score is None:
-                print("Match finished, but final score is not available yet.")
+        if current is None:
+            if (
+                kickoff
+                and is_older_than(
+                    kickoff, STALE_AFTER_HOURS, now
+                )
+            ):
+                finish_stale(
+                    state,
+                    active,
+                    "api_football",
+                    "Матч не найден даже при отдельном "
+                    "запросе по ID более 6 часов после начала",
+                )
+            else:
+                print(
+                    "Active match not found by date or ID; "
+                    "waiting for the next run."
+                )
                 return
 
-            send_result(active, score)
-            remember_processed(state, f"api_football:{active['id']}")
-            state["active"] = None
-            save_state(state)
-
-        elif status in CANCEL_STATUSES:
-            finish_cancelled(state, active, status, "api_football")
-
         else:
-            print(f"Waiting for active match to finish: {status}")
-            return
+            fixture = current.get("fixture") or {}
+            status_obj = fixture.get("status") or {}
+            status = str(status_obj.get("short", "")).upper()
 
-    # Do not send a new prediction if an active match remains.
+            if status in FINAL_STATUSES:
+                score = new_extract_score(current)
+
+                if score is None:
+                    if close_if_score_unavailable(
+                        state, active, "api_football", now
+                    ):
+                        pass
+                    else:
+                        print(
+                            "Match finished, but final score "
+                            "is not available yet."
+                        )
+                        return
+                else:
+                    send_result(active, score)
+                    remember_processed(
+                        state, f"api_football:{fixture_id}"
+                    )
+                    state["active"] = None
+                    save_state(state)
+
+            elif status in CANCEL_STATUSES:
+                finish_cancelled(
+                    state, active, status, "api_football"
+                )
+
+            elif (
+                kickoff
+                and is_older_than(
+                    kickoff, STALE_AFTER_HOURS, now
+                )
+            ):
+                finish_stale(
+                    state,
+                    active,
+                    "api_football",
+                    f"Матч слишком долго не получил "
+                    f"финальный статус: {status or 'неизвестен'}",
+                )
+
+            else:
+                print(f"Waiting for active match to finish: {status}")
+                return
+
+    # 4. Если старая запись закрыта, выбираем новый матч.
     if state.get("active") is not None:
         print("An active match remains; not selecting another.")
         return
@@ -387,15 +560,19 @@ def main():
         fixture = match.get("fixture") or {}
         fixture_id = fixture.get("id")
         kickoff = new_kickoff(match)
+
         status_obj = fixture.get("status") or {}
         status = str(status_obj.get("short", "")).upper()
 
         if not fixture_id or kickoff is None:
             continue
+
         if f"api_football:{fixture_id}" in processed:
             continue
+
         if status != "NS":
             continue
+
         if not (now < kickoff <= window_end):
             continue
 
@@ -410,9 +587,13 @@ def main():
     kickoff, match = candidates[0]
     fixture = match.get("fixture") or {}
     fixture_id = fixture["id"]
+
     home, away = new_team_names(match)
     prediction = "НЕЧЁТ"
-    local_time = kickoff.astimezone(TASHKENT).strftime("%d.%m.%Y %H:%M")
+
+    local_time = kickoff.astimezone(TASHKENT).strftime(
+        "%d.%m.%Y %H:%M"
+    )
 
     state["active"] = {
         "provider": "api_football",
@@ -423,7 +604,7 @@ def main():
         "prediction": prediction,
     }
 
-    # Save state before sending the Telegram message.
+    # Сначала сохраняем состояние, затем отправляем прогноз.
     save_state(state)
 
     send_telegram(
