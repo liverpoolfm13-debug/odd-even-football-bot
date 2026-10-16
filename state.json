@@ -1,5 +1,12 @@
 {
-  "active": null,
+  "active": {
+    "provider": "api_football",
+    "id": "1519176",
+    "kickoffAt": "2026-10-16T08:00:00+00:00",
+    "home": "Ural U20",
+    "away": "Lokomotiv Moskva U19",
+    "prediction": "НЕЧЁТ"
+  },
   "processed": [
     "match_fmb_ucl_2026-27_20261013_lens_sporting_cp",
     "match_fmb_ucl_2026-27_20261013_arsenal_lille",
